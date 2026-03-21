@@ -1,4 +1,4 @@
-name: OpenWrt_Auto_Build_CT3003
+name: OpenWrt_Auto_Build_Force
 
 on:
   workflow_dispatch:
@@ -26,56 +26,53 @@ jobs:
       run: |
         git clone --depth 1 $REPO_URL -b $REPO_BRANCH openwrt
 
-    - name: Update & Install Feeds
+    - name: Update & Install Feeds (暴力清場)
       run: |
         cd openwrt
-        # 添加 PassWall 2 官方源
+        # 加入訂閱源
         echo 'src-git passwall https://github.com/xiaorouji/openwrt-passwall;main' >> feeds.conf.default
         echo 'src-git passwall_packages https://github.com/xiaorouji/openwrt-passwall-packages;main' >> feeds.conf.default
         
+        # 更新源
         ./scripts/feeds update -a
         
-        # 核心：自動解決重複依賴衝突，避免編譯報錯
+        # 【核心操作】直接剷走所有導致 exit code 1 嘅衝突文件
+        # 呢啲就是你 Log 入面顯示緊嗰堆
         rm -rf feeds/packages/net/v2ray-geodata
         rm -rf feeds/packages/net/mosdns
-        rm -rf feeds/luci/applications/luci-app-passwall
+        rm -rf feeds/packages/net/xray-core
+        rm -rf feeds/packages/net/v2ray-core
+        rm -rf feeds/packages/net/sing-box
         
-        ./scripts/feeds install -a
+        # 強制安裝，唔理警告
+        ./scripts/feeds install -f -a
 
     - name: Load Custom Configuration
       run: |
         cd openwrt
-        # 1. 修改預設登入 IP 為 192.168.6.1
+        # 修改 IP
         sed -i 's/192.168.1.1/192.168.6.1/g' package/base-files/files/bin/config_generate
         
-        # 2. 注入 CT3003 機型配置同埋核心插件
+        # 寫入 CT3003 同 PassWall 必選配置
         cat >> .config <<EOF
-        # 選定硬件
         CONFIG_TARGET_mediatek=y
         CONFIG_TARGET_mediatek_filogic=y
         CONFIG_TARGET_mediatek_filogic_DEVICE_cetron_ct3003=y
-        
-        # 必選插件
         CONFIG_PACKAGE_luci-app-passwall=y
-        CONFIG_PACKAGE_luci-app-passwall_INCLUDE_Xray=y
         CONFIG_PACKAGE_luci-app-ssr-plus=y
-        CONFIG_PACKAGE_luci-app-turboacc=y
-        
-        # 界面語言 (簡體中文)
         CONFIG_LUCI_LANG_zh_Hans=y
         EOF
         
-        # 3. 自動補全所有依賴，唔使你入 SSH 揀
         make defconfig
 
     - name: Final Compile
       run: |
         cd openwrt
-        # 第一次編譯建議用單線程，最穩陣
+        # 呢度要行好耐，千祈唔好中斷
         make -j1 V=s
 
     - name: Upload firmware
       uses: actions/upload-artifact@v4
       with:
-        name: CT3003_OpenWrt_Firmware
+        name: CT3003_Final_Firmware
         path: openwrt/bin/targets/mediatek/filogic/*.bin
