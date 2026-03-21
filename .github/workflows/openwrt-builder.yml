@@ -17,8 +17,10 @@ on:
   workflow_dispatch:
 
 env:
-  REPO_URL: https://github.com/coolsnowwolf/lede
-  REPO_BRANCH: master
+  # 改為 EasyWrt 嘅倉庫地址
+  REPO_URL: https://github.com/xiangfeidexiaohuo/EasyWrt
+  # 分支通常用 main
+  REPO_BRANCH: main
   FEEDS_CONF: feeds.conf.default
   CONFIG_FILE: .config
   DIY_P1_SH: diy-part1.sh
