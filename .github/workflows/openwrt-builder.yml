@@ -1,4 +1,4 @@
-name: OpenWrt Builder
+name: OpenWrt Builder (SSH Manual Mode)
 
 on:
   workflow_dispatch:
@@ -9,9 +9,7 @@ on:
         default: 'true'
 
 env:
-  # 只保留一個，消除警告
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-  # 換成更穩定的 Lede 源碼
   REPO_URL: https://github.com/coolsnowwolf/lede
   REPO_BRANCH: master
   TZ: Asia/Shanghai
@@ -32,37 +30,16 @@ jobs:
 
     - name: Clone source code
       run: |
-        # 使用 --single-branch 提高成功率
         git clone --depth 1 --single-branch $REPO_URL -b $REPO_BRANCH openwrt
 
-    - name: Add PassWall 2 & Feeds
+    # 呢一步只係幫你寫入 Feeds 地址，唔執行安裝，避免報錯退出
+    - name: Pre-configure Feeds
       run: |
         cd openwrt
-        # 添加 PassWall 2 官方源
         echo 'src-git passwall https://github.com/xiaorouji/openwrt-passwall;main' >> feeds.conf.default
         echo 'src-git passwall_packages https://github.com/xiaorouji/openwrt-passwall-packages;main' >> feeds.conf.default
-        
-        ./scripts/feeds update -a
-        ./scripts/feeds install -a
 
-    - name: Inject Configuration
-      run: |
-        cd openwrt
-        # 修改 IP 為 192.168.6.1
-        sed -i 's/192.168.1.1/192.168.6.1/g' package/base-files/files/bin/config_generate
-        
-        # 寫入 CT3003 核心配置
-        cat >> .config <<EOF
-        CONFIG_TARGET_mediatek=y
-        CONFIG_TARGET_mediatek_filogic=y
-        CONFIG_TARGET_mediatek_filogic_DEVICE_cetron_ct3003=y
-        CONFIG_PACKAGE_luci-app-ssr-plus=y
-        CONFIG_PACKAGE_luci-app-passwall=y
-        CONFIG_LUCI_LANG_zh_Hans=y
-        EOF
-        
-        make defconfig
-
+    # 直接進入 SSH 模式
     - name: SSH connection to Actions
       uses: P3TERX/ssh2actions@main
       if: github.event.inputs.ssh == 'true'
