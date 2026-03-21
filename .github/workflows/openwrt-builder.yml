@@ -1,10 +1,11 @@
-name: OpenWrt_CT3003_Final_Success
+name: OpenWrt_CT3003_ImmortalWrt
 
 on:
   workflow_dispatch:
 
 env:
-  REPO_URL: https://github.com/coolsnowwolf/lede
+  # 換成對插件兼容性最好嘅 ImmortalWrt
+  REPO_URL: https://github.com/immortalwrt/immortalwrt
   REPO_BRANCH: master
   TZ: Asia/Shanghai
 
@@ -26,28 +27,12 @@ jobs:
       run: |
         git clone --depth 1 $REPO_URL -b $REPO_BRANCH openwrt
 
-    - name: Update & Install Feeds (終極手術)
+    - name: Update & Install Feeds
       run: |
         cd openwrt
-        # 添加第三方源
+        # ImmortalWrt 已經內置咗好多插件，我哋只需加返 PassWall 就得
         echo 'src-git passwall https://github.com/xiaorouji/openwrt-passwall;main' >> feeds.conf.default
-        echo 'src-git passwall_packages https://github.com/xiaorouji/openwrt-passwall-packages;main' >> feeds.conf.default
-        
-        # 1. 更新索引 (呢步通常唔會報錯)
         ./scripts/feeds update -a
-        
-        # 2. 關鍵手術：直接去源碼個 folder 度剷走嗰啲「撞名」嘅資料夾
-        # 既然佢哋同 PassWall 衝突，我哋就優先保住 PassWall
-        [ -d feeds/packages/net/v2ray-geodata ] && rm -rf feeds/packages/net/v2ray-geodata
-        [ -d feeds/packages/net/mosdns ] && rm -rf feeds/packages/net/mosdns
-        [ -d feeds/packages/net/xray-core ] && rm -rf feeds/packages/net/xray-core
-        [ -d feeds/packages/net/v2ray-core ] && rm -rf feeds/packages/net/v2ray-core
-        [ -d feeds/packages/net/sing-box ] && rm -rf feeds/packages/net/sing-box
-        [ -d feeds/packages/net/v2ray-plugin ] && rm -rf feeds/packages/net/v2ray-plugin
-        [ -d feeds/packages/net/xray-plugin ] && rm -rf feeds/packages/net/xray-plugin
-        [ -d feeds/luci/applications/luci-app-passwall ] && rm -rf feeds/luci/applications/luci-app-passwall
-        
-        # 3. 宜家再行 install，保證乾乾淨淨，唔會再報 exit code 1
         ./scripts/feeds install -a
 
     - name: Load Custom Configuration
@@ -56,27 +41,29 @@ jobs:
         # 修改 IP 為 192.168.6.1
         sed -i 's/192.168.1.1/192.168.6.1/g' package/base-files/files/bin/config_generate
         
-        # 寫入 CT3003 核心配置
+        # 寫入 CT3003 配置
         cat >> .config <<EOF
         CONFIG_TARGET_mediatek=y
         CONFIG_TARGET_mediatek_filogic=y
         CONFIG_TARGET_mediatek_filogic_DEVICE_cetron_ct3003=y
+        
+        # 核心插件
         CONFIG_PACKAGE_luci-app-passwall=y
         CONFIG_PACKAGE_luci-app-ssr-plus=y
+        CONFIG_PACKAGE_luci-app-turboacc=y
         CONFIG_LUCI_LANG_zh_Hans=y
         EOF
         
-        # 補完依賴
         make defconfig
 
     - name: Final Compile
       run: |
         cd openwrt
-        # 第一次編譯建議用單線程，V=s 方便睇錯喺邊
+        # 第一次用單線程穩陣啲
         make -j1 V=s
 
     - name: Upload firmware
       uses: actions/upload-artifact@v4
       with:
-        name: OpenWrt_CT3003_OK
+        name: ImmortalWrt_CT3003_BIN
         path: openwrt/bin/targets/mediatek/filogic/*.bin
