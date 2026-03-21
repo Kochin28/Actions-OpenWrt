@@ -9,8 +9,9 @@ on:
         default: 'true'
 
 env:
-  # 呢度就係你要嘅環境變量，強制使用 Node 24 消除警告
+  # 強制使用 Node 24 並允許舊版本操作，消除所有 Node 相關警告
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
   REPO_URL: https://github.com/xiangfeidexiaohuo/EasyWrt
   REPO_BRANCH: main
   TZ: Asia/Shanghai
@@ -31,7 +32,7 @@ jobs:
 
     - name: Clone source code
       run: |
-        git clone $REPO_URL -b $REPO_BRANCH openwrt
+        git clone --depth 1 $REPO_URL -b $REPO_BRANCH openwrt
 
     - name: Add PassWall 2 Feeds
       run: |
