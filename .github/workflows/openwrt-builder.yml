@@ -1,4 +1,4 @@
-name: OpenWrt_Auto_Build_Force
+name: OpenWrt_CT3003_Final_Fix
 
 on:
   workflow_dispatch:
@@ -26,34 +26,37 @@ jobs:
       run: |
         git clone --depth 1 $REPO_URL -b $REPO_BRANCH openwrt
 
-    - name: Update & Install Feeds (暴力清場)
+    - name: Update & Install Feeds (極限修復)
       run: |
         cd openwrt
-        # 加入訂閱源
+        # 添加源
         echo 'src-git passwall https://github.com/xiaorouji/openwrt-passwall;main' >> feeds.conf.default
         echo 'src-git passwall_packages https://github.com/xiaorouji/openwrt-passwall-packages;main' >> feeds.conf.default
         
-        # 更新源
+        # 1. 更新所有源
         ./scripts/feeds update -a
         
-        # 【核心操作】直接剷走所有導致 exit code 1 嘅衝突文件
-        # 呢啲就是你 Log 入面顯示緊嗰堆
+        # 2. 強制刪除所有已知會衝突嘅資料夾 (針對你 Log 報錯嗰堆)
         rm -rf feeds/packages/net/v2ray-geodata
         rm -rf feeds/packages/net/mosdns
         rm -rf feeds/packages/net/xray-core
         rm -rf feeds/packages/net/v2ray-core
         rm -rf feeds/packages/net/sing-box
+        rm -rf feeds/packages/net/v2ray-plugin
+        rm -rf feeds/packages/net/xray-plugin
+        rm -rf feeds/packages/net/shadowsocks-rust
+        rm -rf feeds/packages/net/shadowsocksr-libev
         
-        # 強制安裝，唔理警告
+        # 3. 再安裝
         ./scripts/feeds install -f -a
 
     - name: Load Custom Configuration
       run: |
         cd openwrt
-        # 修改 IP
+        # 預設 IP 改做你鍾意嘅 192.168.6.1
         sed -i 's/192.168.1.1/192.168.6.1/g' package/base-files/files/bin/config_generate
         
-        # 寫入 CT3003 同 PassWall 必選配置
+        # 寫入 CT3003 配置
         cat >> .config <<EOF
         CONFIG_TARGET_mediatek=y
         CONFIG_TARGET_mediatek_filogic=y
@@ -68,11 +71,11 @@ jobs:
     - name: Final Compile
       run: |
         cd openwrt
-        # 呢度要行好耐，千祈唔好中斷
+        # 呢步會行好耐，只要過咗 Feeds 就得
         make -j1 V=s
 
     - name: Upload firmware
       uses: actions/upload-artifact@v4
       with:
-        name: CT3003_Final_Firmware
+        name: OpenWrt_CT3003_BIN
         path: openwrt/bin/targets/mediatek/filogic/*.bin
