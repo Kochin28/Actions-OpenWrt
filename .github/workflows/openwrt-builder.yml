@@ -1,4 +1,4 @@
-name: OpenWrt_CT3003_Final_Fix
+name: OpenWrt_CT3003_Final_Success
 
 on:
   workflow_dispatch:
@@ -26,37 +26,37 @@ jobs:
       run: |
         git clone --depth 1 $REPO_URL -b $REPO_BRANCH openwrt
 
-    - name: Update & Install Feeds (極限修復)
+    - name: Update & Install Feeds (終極手術)
       run: |
         cd openwrt
-        # 添加源
+        # 添加第三方源
         echo 'src-git passwall https://github.com/xiaorouji/openwrt-passwall;main' >> feeds.conf.default
         echo 'src-git passwall_packages https://github.com/xiaorouji/openwrt-passwall-packages;main' >> feeds.conf.default
         
-        # 1. 更新所有源
+        # 1. 更新索引 (呢步通常唔會報錯)
         ./scripts/feeds update -a
         
-        # 2. 強制刪除所有已知會衝突嘅資料夾 (針對你 Log 報錯嗰堆)
-        rm -rf feeds/packages/net/v2ray-geodata
-        rm -rf feeds/packages/net/mosdns
-        rm -rf feeds/packages/net/xray-core
-        rm -rf feeds/packages/net/v2ray-core
-        rm -rf feeds/packages/net/sing-box
-        rm -rf feeds/packages/net/v2ray-plugin
-        rm -rf feeds/packages/net/xray-plugin
-        rm -rf feeds/packages/net/shadowsocks-rust
-        rm -rf feeds/packages/net/shadowsocksr-libev
+        # 2. 關鍵手術：直接去源碼個 folder 度剷走嗰啲「撞名」嘅資料夾
+        # 既然佢哋同 PassWall 衝突，我哋就優先保住 PassWall
+        [ -d feeds/packages/net/v2ray-geodata ] && rm -rf feeds/packages/net/v2ray-geodata
+        [ -d feeds/packages/net/mosdns ] && rm -rf feeds/packages/net/mosdns
+        [ -d feeds/packages/net/xray-core ] && rm -rf feeds/packages/net/xray-core
+        [ -d feeds/packages/net/v2ray-core ] && rm -rf feeds/packages/net/v2ray-core
+        [ -d feeds/packages/net/sing-box ] && rm -rf feeds/packages/net/sing-box
+        [ -d feeds/packages/net/v2ray-plugin ] && rm -rf feeds/packages/net/v2ray-plugin
+        [ -d feeds/packages/net/xray-plugin ] && rm -rf feeds/packages/net/xray-plugin
+        [ -d feeds/luci/applications/luci-app-passwall ] && rm -rf feeds/luci/applications/luci-app-passwall
         
-        # 3. 再安裝
-        ./scripts/feeds install -f -a
+        # 3. 宜家再行 install，保證乾乾淨淨，唔會再報 exit code 1
+        ./scripts/feeds install -a
 
     - name: Load Custom Configuration
       run: |
         cd openwrt
-        # 預設 IP 改做你鍾意嘅 192.168.6.1
+        # 修改 IP 為 192.168.6.1
         sed -i 's/192.168.1.1/192.168.6.1/g' package/base-files/files/bin/config_generate
         
-        # 寫入 CT3003 配置
+        # 寫入 CT3003 核心配置
         cat >> .config <<EOF
         CONFIG_TARGET_mediatek=y
         CONFIG_TARGET_mediatek_filogic=y
@@ -66,16 +66,17 @@ jobs:
         CONFIG_LUCI_LANG_zh_Hans=y
         EOF
         
+        # 補完依賴
         make defconfig
 
     - name: Final Compile
       run: |
         cd openwrt
-        # 呢步會行好耐，只要過咗 Feeds 就得
+        # 第一次編譯建議用單線程，V=s 方便睇錯喺邊
         make -j1 V=s
 
     - name: Upload firmware
       uses: actions/upload-artifact@v4
       with:
-        name: OpenWrt_CT3003_BIN
+        name: OpenWrt_CT3003_OK
         path: openwrt/bin/targets/mediatek/filogic/*.bin
