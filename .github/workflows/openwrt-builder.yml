@@ -9,7 +9,6 @@ on:
         default: 'true'
 
 env:
-  # 強制使用 Node 24 並允許舊版本操作，消除所有 Node 相關警告
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
   REPO_URL: https://github.com/xiangfeidexiaohuo/EasyWrt
@@ -32,30 +31,45 @@ jobs:
 
     - name: Clone source code
       run: |
+        # 確保 Clone 到當前目錄嘅 openwrt 資料夾
         git clone --depth 1 $REPO_URL -b $REPO_BRANCH openwrt
 
     - name: Add PassWall 2 Feeds
       run: |
+        # 使用絕對路徑確保指令執行成功
         cd openwrt
         echo 'src-git passwall https://github.com/xiaorouji/openwrt-passwall;main' >> feeds.conf.default
         echo 'src-git passwall_packages https://github.com/xiaorouji/openwrt-passwall-packages;main' >> feeds.conf.default
-        ./scripts/feeds update -a
-        ./scripts/feeds install -a
+        
+        # 執行 update 之前檢查文件是否存在
+        if [ -f "./scripts/feeds" ]; then
+            ./scripts/feeds update -a
+            ./scripts/feeds install -a
+        else
+            echo "Error: Cannot find ./scripts/feeds. Clone might have failed."
+            exit 1
+        fi
 
     - name: Inject Custom Configuration
       run: |
         cd openwrt
         # 修改 IP
         sed -i 's/192.168.1.1/192.168.6.1/g' package/base-files/files/bin/config_generate
-        # 注入插件配置
-        echo "CONFIG_TARGET_mediatek=y" >> .config
-        echo "CONFIG_TARGET_mediatek_filogic=y" >> .config
-        echo "CONFIG_TARGET_mediatek_filogic_DEVICE_cetron_ct3003=y" >> .config
-        echo "CONFIG_PACKAGE_luci-app-ssr-plus=y" >> .config
-        echo "CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_Xray=y" >> .config
-        echo "CONFIG_PACKAGE_luci-app-passwall=y" >> .config
-        echo "CONFIG_PACKAGE_luci-app-passwall_INCLUDE_Xray=y" >> .config
-        echo "CONFIG_LUCI_LANG_zh_Hans=y" >> .config
+        
+        # 寫入配置 (CT3003 專用)
+        cat >> .config <<EOF
+        CONFIG_TARGET_mediatek=y
+        CONFIG_TARGET_mediatek_filogic=y
+        CONFIG_TARGET_mediatek_filogic_DEVICE_cetron_ct3003=y
+        CONFIG_PACKAGE_luci-app-ssr-plus=y
+        CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_Xray=y
+        CONFIG_PACKAGE_luci-app-passwall=y
+        CONFIG_PACKAGE_luci-app-passwall_INCLUDE_Xray=y
+        CONFIG_LUCI_LANG_zh_Hans=y
+        EOF
+        
+        # 補全依賴
+        make defconfig
 
     - name: SSH connection to Actions
       uses: P3TERX/ssh2actions@main
@@ -64,5 +78,4 @@ jobs:
     - name: Final Compile
       run: |
         cd openwrt
-        make defconfig
         make -j$(nproc) || make -j1 V=s
