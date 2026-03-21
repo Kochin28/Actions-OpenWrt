@@ -9,10 +9,11 @@ on:
         default: 'true'
 
 env:
+  # 只保留一個，消除警告
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-  ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
-  REPO_URL: https://github.com/xiangfeidexiaohuo/EasyWrt
-  REPO_BRANCH: main
+  # 換成更穩定的 Lede 源碼
+  REPO_URL: https://github.com/coolsnowwolf/lede
+  REPO_BRANCH: master
   TZ: Asia/Shanghai
 
 jobs:
@@ -31,44 +32,35 @@ jobs:
 
     - name: Clone source code
       run: |
-        # 確保 Clone 到當前目錄嘅 openwrt 資料夾
-        git clone --depth 1 $REPO_URL -b $REPO_BRANCH openwrt
+        # 使用 --single-branch 提高成功率
+        git clone --depth 1 --single-branch $REPO_URL -b $REPO_BRANCH openwrt
 
-    - name: Add PassWall 2 Feeds
+    - name: Add PassWall 2 & Feeds
       run: |
-        # 使用絕對路徑確保指令執行成功
         cd openwrt
+        # 添加 PassWall 2 官方源
         echo 'src-git passwall https://github.com/xiaorouji/openwrt-passwall;main' >> feeds.conf.default
         echo 'src-git passwall_packages https://github.com/xiaorouji/openwrt-passwall-packages;main' >> feeds.conf.default
         
-        # 執行 update 之前檢查文件是否存在
-        if [ -f "./scripts/feeds" ]; then
-            ./scripts/feeds update -a
-            ./scripts/feeds install -a
-        else
-            echo "Error: Cannot find ./scripts/feeds. Clone might have failed."
-            exit 1
-        fi
+        ./scripts/feeds update -a
+        ./scripts/feeds install -a
 
-    - name: Inject Custom Configuration
+    - name: Inject Configuration
       run: |
         cd openwrt
-        # 修改 IP
+        # 修改 IP 為 192.168.6.1
         sed -i 's/192.168.1.1/192.168.6.1/g' package/base-files/files/bin/config_generate
         
-        # 寫入配置 (CT3003 專用)
+        # 寫入 CT3003 核心配置
         cat >> .config <<EOF
         CONFIG_TARGET_mediatek=y
         CONFIG_TARGET_mediatek_filogic=y
         CONFIG_TARGET_mediatek_filogic_DEVICE_cetron_ct3003=y
         CONFIG_PACKAGE_luci-app-ssr-plus=y
-        CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_Xray=y
         CONFIG_PACKAGE_luci-app-passwall=y
-        CONFIG_PACKAGE_luci-app-passwall_INCLUDE_Xray=y
         CONFIG_LUCI_LANG_zh_Hans=y
         EOF
         
-        # 補全依賴
         make defconfig
 
     - name: SSH connection to Actions
