@@ -91,5 +91,6 @@ jobs:
     - name: Upload firmware
       uses: actions/upload-artifact@v4
       with:
-        name: CT3003_Extreme_Lite_BIN
-        path: openwrt/bin/targets/mediatek/filogic/*-sysupgrade.bin
+        name: CT3003_Final_Factory_Ready
+        # 呢度係關鍵：用星號攞晒所有 bin，唔好淨係要 sysupgrade
+        path: openwrt/bin/targets/mediatek/filogic/*.bin
