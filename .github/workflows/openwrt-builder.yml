@@ -1,4 +1,4 @@
-name: CT3003_PassWall2_Final
+name: CT3003_Final_Success_V3
 
 on:
   workflow_dispatch:
@@ -19,7 +19,7 @@ jobs:
     - name: Initialization environment
       run: |
         sudo -E apt-get -qq update
-        sudo -E apt-get -qq install ack antlr3 asciidoc autoconf automake autopoint binutils bison build-essential bzip2 ccache cmake cpio curl device-tree-compiler fastjar flex gawk gettext gcc-multilib g++-multilib git gperf haveged help2man intltool libc6-dev-i386 libelf-dev libfuse-dev libglib2.0-dev libgmp3-dev libltdl-dev libmpc-dev libmpfr-dev libncurses5-dev libncursesw5-dev libpython3-dev libreadline-dev libssl-dev libtool lrzsz mkisofs msmtp ninja-build p7zip p7zip-full patch pkgconf python3 python3-pyelftools python3-setuptools qemu-utils rsync scons squashfs-tools subversion swig texinfo uglifyjs upx-ucl unzip vim wget xmlto xxd zlib1g-dev
+        sudo -E apt-get -qq install build-essential git
         sudo timedatectl set-timezone "$TZ"
 
     - name: Clone source code
@@ -28,20 +28,19 @@ jobs:
     - name: Update & Install Feeds
       run: |
         cd openwrt
-        # 強制加入 PassWall 2 官方倉庫，確保版本最新
-        echo 'src-git passwall https://github.com/xiaorouji/openwrt-passwall;main' >> feeds.conf.default
-        echo 'src-git passwall_packages https://github.com/xiaorouji/openwrt-passwall-packages;main' >> feeds.conf.default
-        
+        # 只更新官方源，唔喺度加 PassWall，防止 Feeds 報錯
         ./scripts/feeds update -a
-        
-        # 暴力清理：解決原本源碼同 PassWall 2 嘅組件衝突（防止 code 1）
-        rm -rf feeds/packages/net/v2ray-geodata
-        rm -rf feeds/packages/net/mosdns
-        rm -rf feeds/packages/net/xray-core
-        rm -rf feeds/packages/net/v2ray-core
-        rm -rf feeds/packages/net/sing-box
-        
         ./scripts/feeds install -a
+
+    - name: Download PassWall 2 Directly
+      run: |
+        cd openwrt/package
+        # 暴力做法：直接 clone 到 package 目錄，跳過 Feeds 合併過程
+        git clone --depth 1 https://github.com/xiaorouji/openwrt-passwall-packages.git pw_pkgs
+        git clone --depth 1 https://github.com/xiaorouji/openwrt-passwall.git pw_app
+        # 清理可能衝突嘅包
+        rm -rf pw_pkgs/v2ray-geodata
+        rm -rf pw_pkgs/mosdns
 
     - name: Load Custom Configuration
       run: |
@@ -58,30 +57,26 @@ jobs:
         # 核心插件：PassWall 2 + SSR Plus + TurboACC
         CONFIG_PACKAGE_luci-app-passwall=y
         CONFIG_PACKAGE_luci-app-passwall_INCLUDE_Xray=y
-        CONFIG_PACKAGE_luci-app-passwall_INCLUDE_SingBox=y
         CONFIG_PACKAGE_luci-app-ssr-plus=y
         CONFIG_PACKAGE_luci-app-turboacc=y
         CONFIG_PACKAGE_luci-app-ramfree=y
-        
-        # 界面語言與基礎包
         CONFIG_LUCI_LANG_zh_Hans=y
         
-        # 內存優化：禁用 IPv6
+        # 禁用 IPv6 慳內存
         # CONFIG_PACKAGE_luci-proto-ipv6 is not set
         # CONFIG_PACKAGE_kmod-ipv6 is not set
         EOF
         
-        # 3. 補全依賴並自動化
         make defconfig
 
     - name: Final Compile
       run: |
         cd openwrt
-        # 第一次編譯建議單線程，雖然慢但唔會報錯
+        # 第一次編譯用單線程 V=s，方便睇錯喺邊
         make -j1 V=s
 
     - name: Upload firmware
       uses: actions/upload-artifact@v4
       with:
-        name: CT3003_PassWall2_Ready
+        name: CT3003_Final_Firmware
         path: openwrt/bin/targets/mediatek/filogic/*.bin
