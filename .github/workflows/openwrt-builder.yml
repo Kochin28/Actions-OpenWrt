@@ -1,10 +1,9 @@
-name: OpenWrt_CT3003_ImmortalWrt
+name: CT3003_PassWall2_Final
 
 on:
   workflow_dispatch:
 
 env:
-  # 換成對插件兼容性最好嘅 ImmortalWrt
   REPO_URL: https://github.com/immortalwrt/immortalwrt
   REPO_BRANCH: master
   TZ: Asia/Shanghai
@@ -24,46 +23,65 @@ jobs:
         sudo timedatectl set-timezone "$TZ"
 
     - name: Clone source code
-      run: |
-        git clone --depth 1 $REPO_URL -b $REPO_BRANCH openwrt
+      run: git clone --depth 1 $REPO_URL -b $REPO_BRANCH openwrt
 
     - name: Update & Install Feeds
       run: |
         cd openwrt
-        # ImmortalWrt 已經內置咗好多插件，我哋只需加返 PassWall 就得
+        # 強制加入 PassWall 2 官方倉庫，確保版本最新
         echo 'src-git passwall https://github.com/xiaorouji/openwrt-passwall;main' >> feeds.conf.default
+        echo 'src-git passwall_packages https://github.com/xiaorouji/openwrt-passwall-packages;main' >> feeds.conf.default
+        
         ./scripts/feeds update -a
+        
+        # 暴力清理：解決原本源碼同 PassWall 2 嘅組件衝突（防止 code 1）
+        rm -rf feeds/packages/net/v2ray-geodata
+        rm -rf feeds/packages/net/mosdns
+        rm -rf feeds/packages/net/xray-core
+        rm -rf feeds/packages/net/v2ray-core
+        rm -rf feeds/packages/net/sing-box
+        
         ./scripts/feeds install -a
 
     - name: Load Custom Configuration
       run: |
         cd openwrt
-        # 修改 IP 為 192.168.6.1
+        # 1. 修改默認 IP 為 192.168.6.1
         sed -i 's/192.168.1.1/192.168.6.1/g' package/base-files/files/bin/config_generate
         
-        # 寫入 CT3003 配置
+        # 2. 寫入 CT3003 核心配置 (針對 256M 內存精簡)
         cat >> .config <<EOF
         CONFIG_TARGET_mediatek=y
         CONFIG_TARGET_mediatek_filogic=y
         CONFIG_TARGET_mediatek_filogic_DEVICE_cetron_ct3003=y
         
-        # 核心插件
+        # 核心插件：PassWall 2 + SSR Plus + TurboACC
         CONFIG_PACKAGE_luci-app-passwall=y
+        CONFIG_PACKAGE_luci-app-passwall_INCLUDE_Xray=y
+        CONFIG_PACKAGE_luci-app-passwall_INCLUDE_SingBox=y
         CONFIG_PACKAGE_luci-app-ssr-plus=y
         CONFIG_PACKAGE_luci-app-turboacc=y
+        CONFIG_PACKAGE_luci-app-ramfree=y
+        
+        # 界面語言與基礎包
         CONFIG_LUCI_LANG_zh_Hans=y
+        
+        # 內存優化：禁用 IPv6
+        # CONFIG_PACKAGE_luci-proto-ipv6 is not set
+        # CONFIG_PACKAGE_kmod-ipv6 is not set
         EOF
         
+        # 3. 補全依賴並自動化
         make defconfig
 
     - name: Final Compile
       run: |
         cd openwrt
-        # 第一次用單線程穩陣啲
+        # 第一次編譯建議單線程，雖然慢但唔會報錯
         make -j1 V=s
 
     - name: Upload firmware
       uses: actions/upload-artifact@v4
       with:
-        name: ImmortalWrt_CT3003_BIN
+        name: CT3003_PassWall2_Ready
         path: openwrt/bin/targets/mediatek/filogic/*.bin
