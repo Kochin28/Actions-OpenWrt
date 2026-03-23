@@ -1,4 +1,4 @@
-name: CT3003_Final_Recovery_SUCCESS
+name: CT3003_Final_Success_V3
 
 on:
   workflow_dispatch:
@@ -34,26 +34,22 @@ jobs:
     - name: Load Custom Configuration
       run: |
         cd openwrt
-        # 1. 強制修改 IP 為 192.168.6.1
+        # 1. 設置 IP 為 192.168.6.1
         sed -i 's/192.168.1.1/192.168.6.1/g' package/base-files/files/bin/config_generate
         
-        # 2. 核心配置：確保係 Stock Layout (救機關鍵)
+        # 2. 核心配置 (強制適配 Stock Layout)
         cat >> .config <<EOF
         CONFIG_TARGET_mediatek=y
         CONFIG_TARGET_mediatek_filogic=y
         CONFIG_TARGET_mediatek_filogic_DEVICE_cetron_ct3003=y
-        
-        # 核心插件 (SSR Plus & Passwall 2 雙併)
         CONFIG_PACKAGE_luci-app-ssr-plus=y
         CONFIG_PACKAGE_luci-app-passwall=y
         CONFIG_PACKAGE_luci-app-passwall_INCLUDE_Xray=y
         CONFIG_PACKAGE_luci-app-turboacc=y
         CONFIG_PACKAGE_luci-app-ramfree=y
         CONFIG_LUCI_LANG_zh_Hans=y
-
-        # 徹底去除 IPv6 (慳空間)
+        # 禁用 IPv6 確保空間充足
         # CONFIG_PACKAGE_ipv6helper is not set
-        # CONFIG_PACKAGE_luci-proto-ipv6 is not set
         EOF
         
         make defconfig
@@ -61,10 +57,19 @@ jobs:
     - name: Final Compile
       run: |
         cd openwrt
+        # 使用 -j$(nproc) 加速，失敗自動切換單線程
         make -j$(nproc) || make -j1 V=s
+
+    - name: Organize Files (重要：確保路徑正確)
+      run: |
+        cd openwrt/bin/targets/mediatek/filogic/
+        # 將所有 bin 文件搬到一個特定資料夾，方便 Upload
+        mkdir -p /home/runner/work/firmware
+        cp -f *factory.bin /home/runner/work/firmware/ || true
+        cp -f *sysupgrade.bin /home/runner/work/firmware/ || true
 
     - name: Upload firmware
       uses: actions/upload-artifact@v4
       with:
-        name: CT3003_SUCCESS_BIN
-        path: openwrt/bin/targets/mediatek/filogic/*.bin
+        name: CT3003_REAL_FACTORY_BIN
+        path: /home/runner/work/firmware/*.bin
