@@ -1,11 +1,11 @@
-name: CT3003_Final_Success_V3
+name: CT3003_LEDE_UBI_SUCCESS
 
 on:
   workflow_dispatch:
 
 env:
-  REPO_URL: https://github.com/immortalwrt/immortalwrt
-  REPO_BRANCH: openwrt-23.05
+  REPO_URL: https://github.com/coolsnowwolf/lede
+  REPO_BRANCH: master
   TZ: Asia/Shanghai
 
 jobs:
@@ -28,48 +28,56 @@ jobs:
     - name: Update & Install Feeds
       run: |
         cd openwrt
+        # 加入大雕核心插件源
+        sed -i 's/^#\(.*helloworld\)/\1/' feeds.conf.default
         ./scripts/feeds update -a
         ./scripts/feeds install -a
 
     - name: Load Custom Configuration
       run: |
         cd openwrt
-        # 1. 設置 IP 為 192.168.6.1
+        # 1. 設置後台 IP 為 192.168.6.1
         sed -i 's/192.168.1.1/192.168.6.1/g' package/base-files/files/bin/config_generate
         
-        # 2. 核心配置 (強制適配 Stock Layout)
+        # 2. 核心配置：鎖定 Mediatek Filogic 同 CT3003
         cat >> .config <<EOF
         CONFIG_TARGET_mediatek=y
         CONFIG_TARGET_mediatek_filogic=y
         CONFIG_TARGET_mediatek_filogic_DEVICE_cetron_ct3003=y
+        
+        # 核心翻牆插件 (SSR Plus & Passwall)
         CONFIG_PACKAGE_luci-app-ssr-plus=y
+        CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_Xray=y
         CONFIG_PACKAGE_luci-app-passwall=y
         CONFIG_PACKAGE_luci-app-passwall_INCLUDE_Xray=y
+        
+        # 系統加速與管理
         CONFIG_PACKAGE_luci-app-turboacc=y
         CONFIG_PACKAGE_luci-app-ramfree=y
+        CONFIG_PACKAGE_luci-app-cpufreq=y
+        
+        # 界面語言 (簡體中文)
         CONFIG_LUCI_LANG_zh_Hans=y
-        # 禁用 IPv6 確保空間充足
-        # CONFIG_PACKAGE_ipv6helper is not set
+        
+        # 極致精簡：移除 IPv6 (根據你之前要求)
+        # CONFIG_IPV6 is not set
+        # CONFIG_PACKAGE_dnsmasq_full_dhcpv6 is not set
         EOF
+        
+        # 3. 處理 dnsmasq 衝突
+        echo "CONFIG_PACKAGE_dnsmasq=n" >> .config
+        echo "CONFIG_PACKAGE_dnsmasq-full=y" >> .config
         
         make defconfig
 
     - name: Final Compile
       run: |
         cd openwrt
-        # 使用 -j$(nproc) 加速，失敗自動切換單線程
         make -j$(nproc) || make -j1 V=s
-
-    - name: Organize Files (重要：確保路徑正確)
-      run: |
-        cd openwrt/bin/targets/mediatek/filogic/
-        # 將所有 bin 文件搬到一個特定資料夾，方便 Upload
-        mkdir -p /home/runner/work/firmware
-        cp -f *factory.bin /home/runner/work/firmware/ || true
-        cp -f *sysupgrade.bin /home/runner/work/firmware/ || true
 
     - name: Upload firmware
       uses: actions/upload-artifact@v4
       with:
-        name: CT3003_REAL_FACTORY_BIN
-        path: /home/runner/work/firmware/*.bin
+        name: CT3003_UBI_FIRMWARE
+        # 攞晒 factory 同 sysupgrade，今次你兩個都可以試
+        path: openwrt/bin/targets/mediatek/filogic/*.bin
